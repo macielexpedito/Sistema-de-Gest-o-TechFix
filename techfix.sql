@@ -1,6 +1,6 @@
 PRAGMA foreign_keys = ON;
 
-PRAGMA foreign_keys;
+PRAGMA foreign_keys;	
 
 CREATE TABLE cargo (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -13,7 +13,7 @@ CREATE TABLE funcionario(
 	nome_funcionario TEXT NOT NULL COLLATE NOCASE,
 	id_cargo INTEGER NOT NULL,
 	status INTEGER NOT NULL DEFAULT 1,
-	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	data_cadastro TEXT NOT NULL DEFAULT (DATE('now', 'localtime')),
 	FOREIGN KEY(id_cargo) REFERENCES cargo (id) ON UPDATE CASCADE ON DELETE CASCADE,
 	UNIQUE (id,id_cargo)
 )STRICT;
@@ -34,18 +34,30 @@ VALUES
 ('Camila Martins', 3),
 ('Andre Ferreira', 3);
 
--- RF02: cadastro de clientes somente por atendentes (2) ou gerentes (1)
 CREATE TABLE cliente (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	nome_cliente TEXT NOT NULL COLLATE NOCASE,
 	email TEXT NOT NULL COLLATE NOCASE UNIQUE,
-	telefone TEXT,
 	status INTEGER NOT NULL DEFAULT 1,
 	id_funcionario INTEGER NOT NULL,
 	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR  id_funcionario_cargo = 2),
 	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id_cargo)
 ) STRICT;
+
+drop TABLE cliente;
+
+CREATE TABLE cliente (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	nome_cliente TEXT NOT NULL COLLATE NOCASE,
+	email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+	status INTEGER NOT NULL DEFAULT 1,
+	id_funcionario INTEGER NOT NULL,
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR  id_funcionario_cargo = 2),
+	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id_cargo)
+) STRICT;
+
 
 INSERT INTO cliente 
 (nome_cliente, email, id_funcionario, id_funcionario_cargo)
@@ -59,80 +71,13 @@ VALUES (
      WHERE id = 6)
 );
 
--- RF07: situações possíveis da OS (e situação do equipamento)
-CREATE TABLE situacao (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	nome_situacao TEXT NOT NULL COLLATE NOCASE UNIQUE,
-	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	status INTEGER NOT NULL DEFAULT 1
-) STRICT;
-
-INSERT INTO situacao (nome_situacao)
-VALUES ('Aberto'),('Em Diagnóstico'),('Orçamento Aprovado'),('Em Reparo'),('Pronto'),('Entregue'),('Cancelado');
-
--- RF03: marca, modelo e tipo cadastrados somente por atendentes (2) ou gerentes (1)
-CREATE TABLE marca (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	nome_marca TEXT NOT NULL COLLATE NOCASE UNIQUE,
-	id_funcionario INTEGER NOT NULL,
-	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR id_funcionario_cargo = 2),
-	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	status INTEGER NOT NULL DEFAULT 1,
-	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo)
-) STRICT;
-
-CREATE TABLE modelo (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	nome_modelo TEXT NOT NULL COLLATE NOCASE UNIQUE,
-	id_funcionario INTEGER NOT NULL,
-	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR id_funcionario_cargo = 2),
-	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	status INTEGER NOT NULL DEFAULT 1,
-	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo)
-) STRICT;
-
-CREATE TABLE tipo (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	nome_tipo TEXT NOT NULL COLLATE NOCASE UNIQUE,
-	id_funcionario INTEGER NOT NULL,
-	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR id_funcionario_cargo = 2),
-	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	status INTEGER NOT NULL DEFAULT 1,
-	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo)
-) STRICT;
-
--- RF03: equipamento do cliente, cadastrado somente por atendentes (2) ou gerentes (1)
-CREATE TABLE equipamento (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	nome_equipamento TEXT NOT NULL,
-	id_marca INTEGER NOT NULL,
-	id_modelo INTEGER NOT NULL,
-	id_tipo INTEGER NOT NULL,
-	id_situacao INTEGER NOT NULL,
-	id_cliente INTEGER NOT NULL,
-	id_funcionario INTEGER NOT NULL,
-	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR id_funcionario_cargo = 2),
-	serial_number TEXT NOT NULL COLLATE NOCASE UNIQUE,
-	imei TEXT COLLATE NOCASE UNIQUE,
-	status INTEGER NOT NULL DEFAULT 1,
-	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	FOREIGN KEY (id_marca) REFERENCES marca (id),
-	FOREIGN KEY (id_modelo) REFERENCES modelo (id),
-	FOREIGN KEY (id_tipo) REFERENCES tipo (id),
-	FOREIGN KEY (id_situacao) REFERENCES situacao (id),
-	FOREIGN KEY (id_cliente) REFERENCES cliente (id),
-	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo),
-	UNIQUE (id, id_cliente)
-) STRICT;
-
--- RF05: catálogo de categorias e serviços cadastrado somente por gerentes (1)
 CREATE TABLE categoria (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	nome_categoria TEXT NOT NULL COLLATE NOCASE UNIQUE,
 	id_funcionario INTEGER NOT NULL,
 	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
 	status INTEGER NOT NULL DEFAULT 1,
-	data_cadastro TEXT NOT NULL DEFAULT (DATETIME ('now','localtime')),
+	data_cadastro TEXT NOT NULL DEFAULT (DATE ('now','localtime')),
 	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo)
 ) STRICT;
 
@@ -142,11 +87,28 @@ INSERT INTO categoria
 VALUES ('Computadores', 1, (SELECT id_cargo FROM funcionario WHERE id = 1)
 );
 
+CREATE TABLE servicos (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	nome_servico INTEGER NOT NULL COLLATE NOCASE UNIQUE,
+	id_categoria INTEGER NOT NULL,
+	preco INTEGER NOT NULL,
+	horas_trabalho REAL NOT NULL,
+	id_funcionario INTEGER NOT NULL,
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo=1),
+	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	status INTEGER NOT NULL DEFAULT 1,
+	FOREIGN KEY (id_categoria) REFERENCES categoria (id),
+	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo)
+) STRICT;
+
 INSERT INTO categoria (nome_categoria, id_funcionario, id_funcionario_cargo)
 VALUES ('áudio', 1, (SELECT id_cargo FROM funcionario WHERE id = 1));
 
 INSERT INTO categoria (nome_categoria, id_funcionario, id_funcionario_cargo)
 VALUES ('celulares', 1, (SELECT id_cargo FROM funcionario WHERE id = 1));
+
+INSERT INTO categoria (nome_categoria, id_funcionario, id_funcionario_cargo)
+VALUES ('computadores', 1, (SELECT id_cargo FROM funcionario WHERE id = 1));
 
 INSERT INTO categoria (nome_categoria, id_funcionario, id_funcionario_cargo)
 VALUES ('eletrônica avançada', 1, (SELECT id_cargo FROM funcionario WHERE id = 1));
@@ -163,6 +125,8 @@ VALUES ('smart tvs', 1, (SELECT id_cargo FROM funcionario WHERE id = 1));
 INSERT INTO categoria (nome_categoria, id_funcionario, id_funcionario_cargo)
 VALUES ('videogames', 1, (SELECT id_cargo FROM funcionario WHERE id = 1));
 
+DROP TABLE IF EXISTS servicos;
+
 CREATE TABLE servicos (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	nome_servico TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -170,7 +134,7 @@ CREATE TABLE servicos (
 	preco INTEGER NOT NULL,
 	horas_trabalho REAL NOT NULL,
 	id_funcionario INTEGER NOT NULL,
-	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo=1),
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
 	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 	status INTEGER NOT NULL DEFAULT 1,
 	FOREIGN KEY (id_categoria) REFERENCES categoria (id),
@@ -211,6 +175,43 @@ CREATE TABLE peca (
 
     id_categoria INTEGER NOT NULL,
 
+    preco_venda INTEGER NOT NULL,
+
+    horas_trabalho REAL NOT NULL,
+
+    id_funcionario INTEGER NOT NULL,
+
+    id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
+
+    id_servicos INTEGER NOT NULL,
+
+    data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+
+    status INTEGER NOT NULL DEFAULT 1,
+
+    FOREIGN KEY (id_categoria) REFERENCES categoria (id),
+
+    FOREIGN KEY (id_servicos) REFERENCES servicos (id),
+
+    FOREIGN KEY (id_funcionario, id_funcionario_cargo) 
+        REFERENCES funcionario (id, id_cargo)
+
+) STRICT;
+
+
+
+SELECT * FROM peca WHERE preco_venda >= 1;
+
+drop TABLE peca;
+
+CREATE TABLE peca (
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    nome_peca TEXT NOT NULL COLLATE NOCASE UNIQUE,
+
+    id_categoria INTEGER NOT NULL,
+
     preco_compra INTEGER NOT NULL,
 
     preco_venda INTEGER NOT NULL,
@@ -236,10 +237,11 @@ CREATE TABLE peca (
 
 ) STRICT;
 
+SELECT * FROM peca WHERE preco_venda >= 1;
+
 INSERT INTO peca
 (nome_peca, id_categoria, preco_compra, preco_venda, estoque_atual, id_funcionario, id_funcionario_cargo, id_servicos)
 VALUES
-
 
 -- Informática / Computadores
 (
@@ -250,6 +252,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'SSD SATA III 480GB 2.5"',
     (SELECT id FROM categoria WHERE nome_categoria = 'computadores'),
@@ -258,6 +261,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Memória RAM DDR4 8GB 2666MHz (Notebook)',
     (SELECT id FROM categoria WHERE nome_categoria = 'computadores'),
@@ -266,6 +270,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Memória RAM DDR4 16GB 3200MHz (Desktop)',
     (SELECT id FROM categoria WHERE nome_categoria = 'computadores'),
@@ -274,6 +279,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Pasta Térmica de Alta Performance (Bisnaga 4g)',
     (SELECT id FROM categoria WHERE nome_categoria = 'eletrônica avançada'),
@@ -282,6 +288,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Fonte ATX 500W 80 Plus Bronze',
     (SELECT id FROM categoria WHERE nome_categoria = 'computadores'),
@@ -290,6 +297,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Bateria Célula Moeda CR2032 (Cartela c/ 5)',
     (SELECT id FROM categoria WHERE nome_categoria = 'eletrônica avançada'),
@@ -298,6 +306,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Cooler para Processador Socket Universal',
     (SELECT id FROM categoria WHERE nome_categoria = 'computadores'),
@@ -306,6 +315,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Cabo SATA III 6Gbps 50cm',
     (SELECT id FROM categoria WHERE nome_categoria = 'computadores'),
@@ -314,6 +324,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Tela LED 15.6" Slim 30 Pinos Full HD',
     (SELECT id FROM categoria WHERE nome_categoria = 'computadores'),
@@ -332,6 +343,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Display Frontal Completo Samsung Galaxy A54',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -340,6 +352,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Display Frontal Completo Motorola Moto G84',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -348,6 +361,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Bateria Compatível iPhone 11 (3110mAh)',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -356,6 +370,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Bateria Compatível Samsung Galaxy A32',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -364,6 +379,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Bateria Compatível Moto G30',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -372,6 +388,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Conector de Carga Type-C Universal (Unidade)',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -380,6 +397,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Conector de Carga Micro USB V8',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -388,6 +406,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Flex de Carga e Microfone Moto G9 Play',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -396,6 +415,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Tampa Traseira de Vidro iPhone 12',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -404,6 +424,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Câmera Traseira Principal Redmi Note 11',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -412,6 +433,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Alto-Falante Auricular Universal',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -430,6 +452,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Barra de LED TV LG 43" (Kit com 3 barras)',
     (SELECT id FROM categoria WHERE nome_categoria = 'smart tvs'),
@@ -438,6 +461,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Placa Fonte TV Samsung UN50TU8000',
     (SELECT id FROM categoria WHERE nome_categoria = 'smart tvs'),
@@ -446,6 +470,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Placa Principal TV LG 43UP7500',
     (SELECT id FROM categoria WHERE nome_categoria = 'smart tvs'),
@@ -454,6 +479,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Cabo Flat T-Con para Display TV 55"',
     (SELECT id FROM categoria WHERE nome_categoria = 'smart tvs'),
@@ -462,6 +488,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Receptor Infravermelho para Controle Remoto TV',
     (SELECT id FROM categoria WHERE nome_categoria = 'smart tvs'),
@@ -480,6 +507,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Álcool Isopropílico 99.8% 1 Litro',
     (SELECT id FROM categoria WHERE nome_categoria = 'eletrônica avançada'),
@@ -488,6 +516,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Fita Kapton Térmica 10mm x 33m',
     (SELECT id FROM categoria WHERE nome_categoria = 'eletrônica avançada'),
@@ -496,6 +525,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Fita Dupla Face Fixação de Telas (3mm x 50m)',
     (SELECT id FROM categoria WHERE nome_categoria = 'celulares'),
@@ -504,6 +534,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Fusível de Louça 5A 250V (Pacote c/ 10)',
     (SELECT id FROM categoria WHERE nome_categoria = 'eletrônica avançada'),
@@ -512,6 +543,7 @@ VALUES
     (SELECT id_cargo FROM funcionario WHERE id = 1),
     1
 ),
+
 (
     'Capacitor Eletrolítico 1000uF x 25V',
     (SELECT id FROM categoria WHERE nome_categoria = 'eletrônica avançada'),
@@ -521,8 +553,68 @@ VALUES
     1
 );
 
+CREATE TABLE marca (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	nome_marca TEXT NOT NULL COLLATE NOCASE UNIQUE,
+	id_funcionario INTEGER NOT NULL,
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR id_funcionario_cargo = 2),
+	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	status INTEGER NOT NULL DEFAULT 1,
+	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo)
+) STRICT;
 
--- Formas de pagamento cadastradas somente por gerentes (1)
+CREATE TABLE modelo (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	nome_modelo TEXT NOT NULL COLLATE NOCASE UNIQUE,
+	id_funcionario INTEGER NOT NULL,
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR id_funcionario_cargo = 2),
+	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	status INTEGER NOT NULL DEFAULT 1,
+	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo)
+) STRICT;
+
+CREATE TABLE tipo (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	nome_tipo TEXT NOT NULL COLLATE NOCASE UNIQUE,
+	id_funcionario INTEGER NOT NULL,
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR id_funcionario_cargo = 2),
+	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	status INTEGER NOT NULL DEFAULT 1,
+	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo)
+) STRICT;
+
+CREATE TABLE equipamento (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	nome_equipamento TEXT NOT NULL,
+	id_marca INTEGER NOT NULL,
+	id_modelo INTEGER NOT NULL,
+	id_tipo INTEGER NOT NULL,
+	id_situacao INTEGER NOT NULL,
+	id_cliente INTEGER NOT NULL,
+	id_funcionario INTEGER NOT NULL,
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1 OR id_funcionario_cargo = 2),
+	serial_number TEXT NOT NULL COLLATE NOCASE UNIQUE,
+	imei TEXT COLLATE NOCASE UNIQUE,
+	status INTEGER NOT NULL DEFAULT 1,
+	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	FOREIGN KEY (id_marca) REFERENCES marca (id),
+	FOREIGN KEY (id_modelo) REFERENCES modelo (id),
+	FOREIGN KEY (id_tipo) REFERENCES tipo (id),
+	FOREIGN KEY (id_situacao) REFERENCES situacao (id),
+	FOREIGN KEY (id_cliente) REFERENCES cliente (id),
+	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario (id, id_cargo),
+	UNIQUE (id, id_cliente)
+) STRICT;
+
+CREATE TABLE forma_pagamento(
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	nome_forma_pagamento TEXT NOT NULL COLLATE NOCASE UNIQUE,
+	id_funcionario INTEGER NOT NULL,
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
+	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime'));
+	status INTEGER NOT NULL DEFAULT 1
+) strict;
+
 CREATE TABLE forma_pagamento(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	nome_forma_pagamento TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -540,7 +632,7 @@ VALUES
 ('Cartão de Débito', 1, (SELECT id_cargo FROM funcionario WHERE id = 1)),
 ('Cartão de Crédito', 1, (SELECT id_cargo FROM funcionario WHERE id = 1));
 
--- RF04: abertura de OS por atendente (2) ou gerente (1); RF06: um único técnico (3) por OS
+
 CREATE TABLE ordem (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	id_equipamento INTEGER NOT NULL,
@@ -564,7 +656,7 @@ CREATE TABLE ordem (
 	UNIQUE (id, id_tecnico)
 ) STRICT;
 
--- RF06: serviços executados na OS, com o preço congelado na data da execução
+
 CREATE TABLE ordem_servico (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	id_ordem INTEGER NOT NULL,
@@ -579,7 +671,7 @@ CREATE TABLE ordem_servico (
 	UNIQUE (id_ordem, id_servico)
 ) STRICT;
 
--- RF07: histórico de todas as mudanças de situação da OS (id_situacao = novo status)
+
 CREATE TABLE ordem_situacao (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	id_ordem INTEGER NOT NULL,
@@ -592,7 +684,7 @@ CREATE TABLE ordem_situacao (
 	FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario (id, id_cargo)
 ) STRICT;
 
--- Peças utilizadas na OS, com o preço de venda congelado
+
 CREATE TABLE ordem_peca (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	id_ordem INTEGER NOT NULL,
@@ -607,3 +699,4 @@ CREATE TABLE ordem_peca (
 	FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario (id, id_cargo),
 	UNIQUE (id_ordem, id_peca)
 ) STRICT;
+
