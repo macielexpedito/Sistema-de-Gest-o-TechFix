@@ -1381,8 +1381,7 @@ VALUES
 (4,
 4,
 '2026-09-20 16:00:00');
--- 2.11. Peças Utilizadas nas Ordens de Serviço (RF11 / RN01 / RN02)
--- Valores de venda congelados na data do vínculo
+
 INSERT
 	INTO
 	ordem_peca (id_ordem,
@@ -1402,9 +1401,7 @@ VALUES
 26000,
 1,
 '2026-09-10 11:30:00');
--- SSD NVMe 512GB para OS 2
--- 2.12. Serviços Executados nas Ordens de Serviço (RF06 / RN02)
--- Valores dos serviços congelados na data da execução
+ 
 INSERT
 	INTO
 	ordem_servico (
@@ -1438,9 +1435,7 @@ VALUES
 22000,
 1,
 '2026-09-20 16:30:00');
--- Higienização PS5
--- 2.13. Baixa/Saída de Peças (RF10)
--- Motivos: Uso em Reparo (Situação ID 4 - Em Reparo) ou Descarte (Situação ID 8)
+
 INSERT
 	INTO
 	saida_peca (
@@ -1472,10 +1467,7 @@ VALUES
 8,
 1,
 1);
--- Peça baixada por Descarte por Defeito/Avaria
--- ==========================================
--- 3. VIEWS E CONSULTAS DE TESTE
--- ==========================================
+
 CREATE VIEW vw_preco_venda_maior_100 AS
 SELECT
 	id,
@@ -1618,7 +1610,192 @@ INSERT INTO cliente (nome_cliente, email, id_funcionario, id_funcionario_cargo) 
 ('Roberto Carlos Andrade',  'roberto.andrade@email.com',   3, 2),
 ('Camila de Cassia Martins','camila.martins@email.com',    3, 2),
 ('Patricia Ferreira Lima',  'patricia.lima@email.com',     3, 2),
-('Lucas Gabriel Barbosa',   'lucas.barbosa@email.com',     1, 1
+('Lucas Gabriel Barbosa',   'lucas.barbosa@email.com',     1, 1);
+
+INSERT INTO modelo (nome_modelo, id_funcionario, id_funcionario_cargo, status) VALUES
+('iPhone 11',              2, 2, 1),
+('iPhone 12',              2, 2, 1),
+('Galaxy A32',             3, 2, 1),
+('Moto G30',               3, 2, 1),
+('Redmi Note 11',          3, 2, 1),
+('Inspiron 15 3000',       1, 1, 1),
+('IdeaPad 3',              2, 2, 1),
+('Smart TV 50 UN50TU8000', 3, 2, 1),
+('Smart TV 43 43UP7500',   3, 2, 1),
+('PlayStation 5',          1, 1, 1);
+
+
+INSERT INTO tipo (nome_tipo, id_funcionario, id_funcionario_cargo, status) VALUES
+('Desktop',                2, 2, 1),
+('Smart TV',               2, 2, 1),
+('Console de Videogame',   3, 2, 1),
+('Caixa de Som Bluetooth', 3, 2, 1);
+
+INSERT INTO equipamento (id_tipo, id_marca, id_modelo, id_cliente, numero_serie, imei, id_funcionario, id_funcionario_cargo) VALUES
+((SELECT id FROM tipo WHERE nome_tipo = 'Smartphone'),
+ (SELECT id FROM marca WHERE nome_marca = 'Apple'),
+ (SELECT id FROM modelo WHERE nome_modelo = 'iPhone 11'),
+ (SELECT id FROM cliente WHERE email = 'marcos.souza@email.com'),
+ NULL, '356789012345671', 2, 2),
+((SELECT id FROM tipo WHERE nome_tipo = 'Smartphone'),
+ (SELECT id FROM marca WHERE nome_marca = 'Samsung'),
+ (SELECT id FROM modelo WHERE nome_modelo = 'Galaxy A54'),
+ (SELECT id FROM cliente WHERE email = 'fernanda.oliveira@email.com'),
+ NULL, '356789012345672', 2, 2),
+((SELECT id FROM tipo WHERE nome_tipo = 'Notebook'),
+ (SELECT id FROM marca WHERE nome_marca = 'Dell'),
+ (SELECT id FROM modelo WHERE nome_modelo = 'Inspiron 15 3000'),
+ (SELECT id FROM cliente WHERE email = 'roberto.andrade@email.com'),
+ 'DELL-INSP-2023-998', NULL, 3, 2),
+((SELECT id FROM tipo WHERE nome_tipo = 'Smart TV'),
+ (SELECT id FROM marca WHERE nome_marca = 'LG'),
+ (SELECT id FROM modelo WHERE nome_modelo = 'Smart TV 50 UN50TU8000'),
+ (SELECT id FROM cliente WHERE email = 'camila.martins@email.com'),
+ 'LG-TV43-77612', NULL, 3, 2),
+((SELECT id FROM tipo WHERE nome_tipo = 'Console de Videogame'),
+ (SELECT id FROM marca WHERE nome_marca = 'Sony'),
+ (SELECT id FROM modelo WHERE nome_modelo = 'PlayStation 5'),
+ (SELECT id FROM cliente WHERE email = 'patricia.lima@email.com'),
+ 'PS5-SONY-009182', NULL, 3, 2),
+((SELECT id FROM tipo WHERE nome_tipo = 'Smartphone'),
+ (SELECT id FROM marca WHERE nome_marca = 'Motorola'),
+ (SELECT id FROM modelo WHERE nome_modelo = 'Moto G84'),
+ (SELECT id FROM cliente WHERE email = 'lucas.barbosa@email.com'),
+ NULL, '356789012345673', 1, 1);
+
+
+INSERT INTO entrada_peca (id_peca, preco_compra, quantidade, id_funcionario, id_funcionario_cargo) VALUES
+((SELECT id FROM peca WHERE nome_peca = 'SSD NVMe 512GB M.2'), 18000, 20, 1, 1),
+((SELECT id FROM peca WHERE nome_peca = 'Memória RAM DDR4 8GB 2666MHz (Notebook)'), 11000, 15, 1, 1),
+((SELECT id FROM peca WHERE nome_peca = 'Display Frontal Completo iPhone 11'), 22000, 10, 1, 1),
+((SELECT id FROM peca WHERE nome_peca = 'Bateria Compatível iPhone 11 (3110mAh)'), 9000, 12, 1, 1),
+((SELECT id FROM peca WHERE nome_peca = 'Barra de LED TV Samsung 50" (Kit com 3 barras)'), 14000, 8, 1, 1);
+
+INSERT INTO ordem (
+	descricao_defeito, defeito_constatado, valor_total, id_equipamento,
+	id_forma_pagamento, id_funcionario_abertura, id_funcionario_cargo,
+	id_situacao_atual, id_tecnico, id_tecnico_cargo, data_fechamento, data_abertura
+) VALUES
+-- OS 1: troca de tela do iPhone 11 (Entregue)
+('Tela quebrada após queda.',
+ 'Display frontal danificado, toque não responde.',
+ 50000, 1,
+ (SELECT id FROM forma_pagamento WHERE nome_forma_pagamento = 'PIX'),
+ 2, 2,
+ (SELECT id FROM situacao WHERE nome_situacao = 'Entregue'),
+ 4, 3, '2026-09-02 16:00:00', '2026-09-01 09:30:00'),
+-- OS 2: upgrade de SSD no Dell (Concluída)
+('Notebook muito lento para ligar.',
+ 'Lentidão provocada por HD mecânico antigo.',
+ 38000, 3,
+ (SELECT id FROM forma_pagamento WHERE nome_forma_pagamento = 'Dinheiro'),
+ 3, 2,
+ (SELECT id FROM situacao WHERE nome_situacao = 'Concluída'),
+ 5, 3, '2026-09-11 14:30:00', '2026-09-10 10:15:00'),
+-- OS 3: Smart TV em análise
+('TV com som, mas imagem não aparece.',
+ 'Barra de LED queimada.',
+ NULL, 4,
+ (SELECT id FROM forma_pagamento WHERE nome_forma_pagamento = 'Dinheiro'),
+ 2, 2,
+ (SELECT id FROM situacao WHERE nome_situacao = 'Em análise'),
+ 4, 3, NULL, '2026-09-15 11:00:00'),
+-- OS 4: PS5 em manutenção
+('Desligando por aquecimento.',
+ 'Acúmulo severo de poeira e necessidade de troca de pasta térmica.',
+ NULL, 5,
+ (SELECT id FROM forma_pagamento WHERE nome_forma_pagamento = 'Cartão de Crédito - À Vista'),
+ 3, 2,
+ (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'),
+ 5, 3, NULL, '2026-09-20 14:20:00');
+
+INSERT INTO ordem_situacao (id_ordem, id_nova_situacao, id_funcionario, data_situacao) VALUES
+(1, (SELECT id FROM situacao WHERE nome_situacao = 'Aberta'),              2, '2026-09-01 09:30:00'),
+(1, (SELECT id FROM situacao WHERE nome_situacao = 'Em análise'),          2, '2026-09-01 10:00:00'),
+(1, (SELECT id FROM situacao WHERE nome_situacao = 'Orçamento Aprovado'),  2, '2026-09-01 11:30:00'),
+(1, (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'),       4, '2026-09-01 14:00:00'),
+(1, (SELECT id FROM situacao WHERE nome_situacao = 'Concluída'),           4, '2026-09-02 15:30:00'),
+(1, (SELECT id FROM situacao WHERE nome_situacao = 'Entregue'),            2, '2026-09-02 16:00:00'),
+(2, (SELECT id FROM situacao WHERE nome_situacao = 'Aberta'),              3, '2026-09-10 10:15:00'),
+(2, (SELECT id FROM situacao WHERE nome_situacao = 'Orçamento Aprovado'),  3, '2026-09-10 10:45:00'),
+(2, (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'),       5, '2026-09-10 11:00:00'),
+(2, (SELECT id FROM situacao WHERE nome_situacao = 'Concluída'),           5, '2026-09-11 14:30:00'),
+(3, (SELECT id FROM situacao WHERE nome_situacao = 'Aberta'),              2, '2026-09-15 11:00:00'),
+(3, (SELECT id FROM situacao WHERE nome_situacao = 'Em análise'),          4, '2026-09-15 15:00:00'),
+(4, (SELECT id FROM situacao WHERE nome_situacao = 'Aberta'),              3, '2026-09-20 14:20:00'),
+(4, (SELECT id FROM situacao WHERE nome_situacao = 'Orçamento Aprovado'),  3, '2026-09-20 15:00:00'),
+(4, (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'),       5, '2026-09-20 16:00:00');
+
+
+INSERT INTO ordem_peca (id_ordem, id_peca, quantidade, valor_unitario, id_tecnico, id_tecnico_cargo, data_situacao) VALUES
+(1, (SELECT id FROM peca WHERE nome_peca = 'Display Frontal Completo iPhone 11'), 1, 35000, 4, 3, '2026-09-01 14:30:00'),
+(2, (SELECT id FROM peca WHERE nome_peca = 'SSD NVMe 512GB M.2'),                 1, 26000, 5, 3, '2026-09-10 11:30:00');
+
+
+INSERT INTO ordem_servico (id_ordem, id_servico, quantidade_servico, preco_praticado, data_execucao) VALUES
+(1, (SELECT id FROM servico WHERE nome_servico = 'Troca de Display/Frontal de Celular'), 1, 15000, '2026-09-01 15:00:00'),
+(2, (SELECT id FROM servico WHERE nome_servico = 'Formatação e Instalação de Sistema Operacional'), 1, 12000, '2026-09-10 13:00:00'),
+(3, (SELECT id FROM servico WHERE nome_servico = 'Troca de Barra de LED de Smart TV'), 1, 35000, '2026-09-15 16:00:00'),
+(4, (SELECT id FROM servico WHERE nome_servico = 'Higienização e Troca de Metal Líquido / Pasta Térmica (Console)'), 1, 22000, '2026-09-20 16:30:00');
+
+
+INSERT INTO saida_peca (id_peca, preco_venda, quantidade, id_situacao, id_funcionario, id_funcionario_cargo) VALUES
+((SELECT id FROM peca WHERE nome_peca = 'Display Frontal Completo iPhone 11'), 35000, 1,
+ (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'), 1, 1),
+((SELECT id FROM peca WHERE nome_peca = 'SSD NVMe 512GB M.2'), 26000, 1,
+ (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'), 1, 1),
+((SELECT id FROM peca WHERE nome_peca = 'Pasta Térmica de Alta Performance (Bisnaga 4g)'), 6000, 1,
+ (SELECT id FROM situacao WHERE nome_situacao = 'Descarte por Defeito/Avaria'), 1, 1);
+
+CREATE VIEW vw_preco_sugerido_maior_100 AS
+SELECT id, nome_peca, preco_sugerido AS 'preço', estoque_real
+FROM peca
+WHERE preco_sugerido >= 10000;
+
+CREATE VIEW vw_estoque_baixo AS
+SELECT id, nome_peca, estoque_real
+FROM peca
+WHERE estoque_real <= 20
+ORDER BY estoque_real DESC;
+
+SELECT * FROM vw_preco_sugerido_maior_100;
+SELECT * FROM vw_estoque_baixo;
+
+SELECT f.nome_funcionario AS 'nome', c.nome_cargo AS 'cargo'
+FROM funcionario f
+JOIN cargo c ON f.id_cargo = c.id;
+
+SELECT * FROM ordem;
+
+
+SELECT
+	o.id AS 'ordem_serviço',
+	m.nome_modelo AS 'modelo',
+	o.defeito_constatado,
+	o.descricao_defeito,
+	fp.nome_forma_pagamento AS 'forma_pagto',
+	f.nome_funcionario AS 'aberto_por',
+	f2.nome_funcionario AS 'atendido_por'
+FROM ordem o
+JOIN equipamento e ON o.id_equipamento = e.id
+JOIN modelo m ON e.id_modelo = m.id
+JOIN forma_pagamento fp ON o.id_forma_pagamento = fp.id
+JOIN funcionario f ON o.id_funcionario_abertura = f.id
+JOIN funcionario f2 ON o.id_tecnico = f2.id;
+
+
+SELECT
+	os.id_ordem AS 'OS',
+	m.nome_modelo AS 'Modelo',
+	s.nome_situacao AS 'Situação',
+	os.data_situacao AS 'Data'
+FROM ordem_situacao os
+JOIN ordem o ON os.id_ordem = o.id
+JOIN situacao s ON os.id_nova_situacao = s.id
+JOIN equipamento e ON o.id_equipamento = e.id
+JOIN modelo m ON e.id_modelo = m.id
+WHERE os.id_ordem = 1;
+
 
 
 
