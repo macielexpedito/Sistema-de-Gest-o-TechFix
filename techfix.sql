@@ -1568,6 +1568,58 @@ JOIN modelo m ON
 WHERE
 	os.id_ordem = 1;
 
+('Motorola', 2, 2, 1),
+('Dell',     3, 2, 1),
+('Lenovo',   3, 2, 1),
+('LG',       1, 1, 1),
+('Sony',     3, 2, 1);
+
+CREATE TABLE entrada_peca (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	id_peca INTEGER NOT NULL,
+	preco_compra INTEGER NOT NULL,
+	quantidade INTEGER NOT NULL,
+	id_funcionario INTEGER NOT NULL,
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
+	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	FOREIGN KEY (id_peca) REFERENCES peca(id),
+	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id_cargo)
+) STRICT;
+
+CREATE TABLE saida_peca (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	id_peca INTEGER NOT NULL,
+	preco_venda INTEGER NOT NULL,
+	quantidade INTEGER NOT NULL,
+	id_situacao INTEGER NOT NULL,
+	id_funcionario INTEGER NOT NULL,
+	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
+	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	FOREIGN KEY (id_peca) REFERENCES peca(id),
+	FOREIGN KEY (id_situacao) REFERENCES situacao(id),
+	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id_cargo)
+
+INSERT INTO situacao (nome_situacao) VALUES
+('Orçamento Aprovado'),
+('Descarte por Defeito/Avaria');
+
+INSERT INTO forma_pagamento (nome_forma_pagamento, id_funcionario, id_funcionario_cargo) VALUES
+('Dinheiro', 1, 1),
+('PIX', 1, 1),
+('Cartão de Débito', 1, 1),
+('Cartão de Crédito - À Vista', 1, 1),
+('Cartão de Crédito - Parcelado', 1, 1),
+('Boleto Bancário', 1, 1);
+
+
+INSERT INTO cliente (nome_cliente, email, id_funcionario, id_funcionario_cargo) VALUES
+('Marcos Vinicius Souza',   'marcos.souza@email.com',      2, 2),
+('Fernanda Maria Oliveira', 'fernanda.oliveira@email.com', 2, 2),
+('Roberto Carlos Andrade',  'roberto.andrade@email.com',   3, 2),
+('Camila de Cassia Martins','camila.martins@email.com',    3, 2),
+('Patricia Ferreira Lima',  'patricia.lima@email.com',     3, 2),
+('Lucas Gabriel Barbosa',   'lucas.barbosa@email.com',     1, 1
+
 
 
 
