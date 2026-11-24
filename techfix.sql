@@ -40,6 +40,8 @@ CREATE TABLE cliente (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	nome_cliente TEXT NOT NULL COLLATE NOCASE,
 	email TEXT NOT NULL COLLATE NOCASE UNIQUE,
+ telefone TEXT NOT NULL,
+ cpf TEXT UNIQUE,
 	id_funcionario INTEGER NOT NULL,
 	id_funcionario_cargo INTEGER NOT NULL CHECK (
 		id_funcionario_cargo = 1
@@ -116,7 +118,7 @@ CREATE TABLE peca (
 	nome_peca TEXT NOT NULL COLLATE NOCASE UNIQUE,
 	id_categoria INTEGER NOT NULL,
 	preco_venda INTEGER NOT NULL,
-	estoque_atual INTEGER NOT NULL,
+	estoque_atual INTEGER NOT NULL CHECK (estoque_atual >= 0),
 	id_funcionario INTEGER NOT NULL,
 	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
 	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
@@ -135,7 +137,8 @@ CREATE TABLE entrada_peca(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	id_peca INTEGER NOT NULL,
 	preco_compra INTEGER NOT NULL,
-	quantidade INTEGER NOT NULL,
+	preco_sugerido_venda INTEGER NOT NULL,
+	quantidade INTEGER NOT NULL CHECK (quantidade > 0),
 	id_funcionario INTEGER NOT NULL,
 	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
 	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
@@ -146,15 +149,20 @@ CREATE TABLE entrada_peca(
 CREATE TABLE saida_peca(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	id_peca INTEGER NOT NULL,
+	id_ordem INTEGER,
+	motivo TEXT NOT NULL CHECK (motivo IN ('USO_EM_REPARO', 'DESCARTE')),
 	preco_venda INTEGER NOT NULL,
-	quantidade INTEGER NOT NULL,
-	id_situacao INTEGER NOT NULL,
-	id_funcionario INTEGER NOT NULL,
-	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
+	quantidade INTEGER NOT NULL CHECK (quantidade > 0),
+	id_tecnico INTEGER NOT NULL,
+	id_tecnico_cargo INTEGER NOT NULL CHECK (id_tecnico_cargo = 3),
 	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	CHECK (
+		(motivo = 'USO_EM_REPARO' AND id_ordem IS NOT NULL)
+		OR (motivo = 'DESCARTE' AND id_ordem IS NULL)
+	),
 	FOREIGN KEY (id_peca) REFERENCES peca(id),
-	FOREIGN KEY (id_situacao) REFERENCES situacao(id),
-	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id_cargo)
+	FOREIGN KEY (id_ordem) REFERENCES ordem(id),
+	FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario(id, id_cargo)
 ) STRICT;
 
 CREATE TABLE forma_pagamento(
@@ -189,7 +197,8 @@ CREATE TABLE ordem(
 	data_abertura TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 	data_fechamento TEXT,
 	valor_total INTEGER,
-	id_forma_pagamento INTEGER NOT NULL,
+	id_situacao_atual INTEGER NOT NULL DEFAULT 1,
+	id_forma_pagamento INTEGER,
 	id_funcionario_abertura INTEGER NOT NULL,
 	id_funcionario_cargo_abertura INTEGER NOT NULL CHECK (
 		id_funcionario_cargo_abertura = 1
@@ -197,12 +206,11 @@ CREATE TABLE ordem(
 	),
 	id_tecnico INTEGER NOT NULL,
 	id_tecnico_cargo INTEGER NOT NULL CHECK (id_tecnico_cargo = 3),
+	CHECK (data_fechamento IS NULL OR id_forma_pagamento IS NOT NULL),
 	FOREIGN KEY (id_equipamento) REFERENCES equipamento(id),
+	FOREIGN KEY (id_situacao_atual) REFERENCES situacao(id),
 	FOREIGN KEY (id_forma_pagamento) REFERENCES forma_pagamento(id),
-	FOREIGN KEY (
-		id_funcionario_abertura,
-		id_funcionario_cargo_abertura
-	) REFERENCES funcionario(id, id_cargo),
+	FOREIGN KEY (id_funcionario_abertura, id_funcionario_cargo_abertura) REFERENCES funcionario(id, id_cargo),
 	FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario(id, id_cargo)
 ) STRICT;
 
@@ -210,11 +218,12 @@ CREATE TABLE ordem_situacao(
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	id_ordem INTEGER NOT NULL,
 	id_nova_situacao INTEGER NOT NULL,
-	id_funcionario INTEGER NOT NULL,
+	id_tecnico INTEGER NOT NULL,
+	id_tecnico_cargo INTEGER NOT NULL CHECK (id_tecnico_cargo = 3),
 	data_situacao TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 	FOREIGN KEY (id_ordem) REFERENCES ordem(id),
-	FOREIGN KEY (id_funcionario) REFERENCES funcionario(id),
-	FOREIGN KEY (id_nova_situacao) REFERENCES situacao(id)
+	FOREIGN KEY (id_nova_situacao) REFERENCES situacao(id),
+	FOREIGN KEY (id_tecnico, id_tecnico_cargo) REFERENCES funcionario(id, id_cargo)
 ) STRICT;
 
 CREATE TABLE ordem_peca(
@@ -238,6 +247,92 @@ CREATE TABLE ordem_servico(
 	FOREIGN KEY (id_ordem) REFERENCES ordem(id),
 	FOREIGN KEY (id_servico) REFERENCES servico(id)
 ) STRICT;
+
+-- 3.1 Entrada de peça soma no estoque
+CREATE TRIGGER trg_entrada_peca_estoque
+AFTER INSERT ON entrada_peca
+BEGIN
+	UPDATE peca SET estoque_atual = estoque_atual + NEW.quantidade
+	WHERE id = NEW.id_peca;
+END;
+
+-- 3.2 Valida a saída: RN03 (estoque) e RN01 (status da OS)
+CREATE TRIGGER trg_saida_peca_valida
+BEFORE INSERT ON saida_peca
+BEGIN
+	SELECT RAISE(ABORT, 'RN03: estoque insuficiente para a baixa da peça')
+	WHERE NEW.quantidade > (SELECT estoque_atual FROM peca WHERE id = NEW.id_peca);
+
+	SELECT RAISE(ABORT, 'RN01: baixa só com a OS em Orçamento Aprovado ou Em Reparo')
+	WHERE NEW.motivo = 'USO_EM_REPARO'
+	AND (
+		SELECT s.nome_situacao
+		FROM ordem o
+		JOIN situacao s ON s.id = o.id_situacao_atual
+		WHERE o.id = NEW.id_ordem
+	) NOT IN ('Orçamento Aprovado', 'Em Reparo');
+END;
+
+-- 3.3 Saída de peça subtrai do estoque
+CREATE TRIGGER trg_saida_peca_estoque
+AFTER INSERT ON saida_peca
+BEGIN
+	UPDATE peca SET estoque_atual = estoque_atual - NEW.quantidade
+	WHERE id = NEW.id_peca;
+END;
+
+-- 3.4 RF11: peça vinculada à OS gera a baixa automaticamente
+CREATE TRIGGER trg_ordem_peca_baixa
+AFTER INSERT ON ordem_peca
+BEGIN
+	INSERT INTO saida_peca (id_peca, id_ordem, motivo, preco_venda, quantidade, id_tecnico, id_tecnico_cargo)
+	SELECT NEW.id_peca, NEW.id_ordem, 'USO_EM_REPARO', NEW.preco, NEW.quantidade, o.id_tecnico, o.id_tecnico_cargo
+	FROM ordem o
+	WHERE o.id = NEW.id_ordem;
+END;
+
+-- 3.5 O histórico deve ser registrado pelo técnico responsável pela OS
+CREATE TRIGGER trg_ordem_situacao_tecnico
+BEFORE INSERT ON ordem_situacao
+WHEN NEW.id_tecnico <> (SELECT id_tecnico FROM ordem WHERE id = NEW.id_ordem)
+BEGIN
+	SELECT RAISE(ABORT, 'O histórico deve ser registrado pelo técnico responsável pela OS');
+END;
+
+-- 3.6 Cada mudança no histórico atualiza o status atual da OS
+CREATE TRIGGER trg_ordem_situacao_atual
+AFTER INSERT ON ordem_situacao
+BEGIN
+	UPDATE ordem SET id_situacao_atual = NEW.id_nova_situacao
+	WHERE id = NEW.id_ordem;
+END;
+
+-- 3.7 RN04: não encerra (Entregue) sem forma de pagamento
+CREATE TRIGGER trg_ordem_exige_pagamento
+BEFORE UPDATE OF id_situacao_atual ON ordem
+WHEN NEW.id_situacao_atual = (SELECT id FROM situacao WHERE nome_situacao = 'Entregue')
+	AND NEW.id_forma_pagamento IS NULL
+BEGIN
+	SELECT RAISE(ABORT, 'RN04: informe a forma de pagamento para encerrar a OS');
+END;
+
+-- 3.8 RN04: ao encerrar, calcula o valor total e grava a data de fechamento
+CREATE TRIGGER trg_ordem_fecha
+AFTER UPDATE OF id_situacao_atual ON ordem
+WHEN NEW.id_situacao_atual = (SELECT id FROM situacao WHERE nome_situacao = 'Entregue')
+BEGIN
+	UPDATE ordem SET
+		valor_total =
+			COALESCE((SELECT SUM(preco_praticado * quantidade) FROM ordem_servico WHERE id_ordem = NEW.id), 0)
+			+ COALESCE((SELECT SUM(preco * quantidade) FROM ordem_peca WHERE id_ordem = NEW.id), 0),
+		data_fechamento = COALESCE(
+			(SELECT data_situacao FROM ordem_situacao
+			 WHERE id_ordem = NEW.id AND id_nova_situacao = NEW.id_situacao_atual
+			 ORDER BY id DESC LIMIT 1),
+			DATETIME('now', 'localtime'))
+	WHERE id = NEW.id;
+END;
+
 -- ==========================================
 -- 2. POPULAÇÃO DE DADOS (DML)
 -- ==========================================
@@ -960,18 +1055,15 @@ VALUES
 -- ==========================================
 -- 2.1. Situações da Ordem de Serviço e Saída de Peças
 -- (RF07: Aberto, Em Diagnóstico, Orçamento Aprovado, Em Reparo, Pronto, Entregue, Cancelado)
-INSERT
-	INTO
-	situacao (nome_situacao)
-VALUES
-	('Aberto'),
+INSERT INTO situacao (nome_situacao) VALUES
+('Aberto'),
 ('Em Diagnóstico'),
 ('Orçamento Aprovado'),
 ('Em Reparo'),
 ('Pronto'),
 ('Entregue'),
-('Cancelado'),
-('Descarte por Defeito/Avaria');
+('Cancelado');
+
 -- 2.2. Formas de Pagamento (Cadastradas por Gerente - Cargo ID 1)
 INSERT
 	INTO
@@ -999,52 +1091,15 @@ VALUES
 ('Boleto Bancário',
 1,
 1);
--- 2.3. Clientes (RF02: Cadastrados por Atendentes [Cargo 2] ou Gerente [Cargo 1])
-INSERT
-	INTO
-	cliente (
-		nome_cliente,
-		email,
-		id_funcionario,
-		id_funcionario_cargo
-	)
-VALUES
-	(
-		'Marcos Vinicius Souza',
-		'marcos.souza@email.com',
-		2,
-		2
-	),
-(
-		'Fernanda Maria Oliveira',
-		'fernanda.oliveira@email.com',
-		2,
-		2
-	),
-(
-		'Roberto Carlos Andrade',
-		'roberto.andrade@email.com',
-		3,
-		2
-	),
-(
-		'Camila de Cassia Martins',
-		'camila.martins@email.com',
-		3,
-		2
-	),
-(
-		'Patricia Ferreira Lima',
-		'patricia.lima@email.com',
-		4,
-		2
-	),
-(
-		'Lucas Gabriel Barbosa',
-		'lucas.barbosa@email.com',
-		1,
-		1
-	);
+
+INSERT INTO cliente (nome_cliente, email, telefone, cpf, id_funcionario, id_funcionario_cargo) VALUES
+('Marcos Vinicius Souza',    'marcos.souza@email.com',      '(11) 90000-0001', '000.000.000-01', 2, 2),
+('Fernanda Maria Oliveira',  'fernanda.oliveira@email.com', '(11) 90000-0002', '000.000.000-02', 2, 2),
+('Roberto Carlos Andrade',   'roberto.andrade@email.com',   '(11) 90000-0003', '000.000.000-03', 3, 2),
+('Camila de Cassia Martins', 'camila.martins@email.com',    '(11) 90000-0004', '000.000.000-04', 3, 2),
+('Patricia Ferreira Lima',   'patricia.lima@email.com',     '(11) 90000-0005', '000.000.000-05', 4, 2),
+('Lucas Gabriel Barbosa',    'lucas.barbosa@email.com',     '(11) 90000-0006', '000.000.000-06', 1, 1);
+
 -- 2.4. Marcas (Cadastradas por Atendentes ou Gerente)
 INSERT
 	INTO
@@ -1184,7 +1239,7 @@ NULL,
 2,
 'DELL-INSP-2023-998',
 NULL),
-(7,
+
 10,
 4,
 4,
@@ -1192,6 +1247,9 @@ NULL),
 2,
 'LG-TV43-77612',
 NULL),
+
+(7,
+
 (8,
 12,
 5,
@@ -1566,17 +1624,60 @@ WHERE
 ('LG',       1, 1, 1),
 ('Sony',     3, 2, 1);
 
-CREATE TABLE entrada_peca (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	id_peca INTEGER NOT NULL,
-	preco_compra INTEGER NOT NULL,
-	quantidade INTEGER NOT NULL,
-	id_funcionario INTEGER NOT NULL,
-	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
-	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	FOREIGN KEY (id_peca) REFERENCES peca(id),
-	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id_cargo)
-) STRICT;
+UPDATE servico SET id_categoria = (SELECT id FROM categoria WHERE nome_categoria = 'computadores')
+WHERE nome_servico IN (
+	'Formatação e Instalação de Sistema Operacional',
+	'Limpeza Interna e Troca de Pasta Térmica',
+	'Upgrade de Hardware (RAM/SSD)',
+	'Remoção de Vírus e Malwares',
+	'Troca de Tela de Notebook');
+
+UPDATE servico SET id_categoria = (SELECT id FROM categoria WHERE nome_categoria = 'celulares')
+WHERE nome_servico IN (
+	'Troca de Display/Frontal de Celular',
+	'Troca de Bateria de Smartphone',
+	'Desoxidação após Contato com Líquido',
+	'Reparo em Conector de Carga (Micro USB / Type-C)',
+	'Troca de Vidro Traseiro de Smartphone a Laser / Manual');
+
+UPDATE servico SET id_categoria = (SELECT id FROM categoria WHERE nome_categoria = 'áudio')
+WHERE nome_servico IN (
+	'Troca de Bateria de Caixa de Som Portátil (Bluetooth)',
+	'Troca de Almofadas / Reparo de Cabo de Headset Gamer',
+	'Reparo e Solda de Conector Jack P2/P10 de Mesa de Som ou Amplificador');
+
+UPDATE peca SET id_categoria = (SELECT id FROM categoria WHERE nome_categoria = 'acessórios')
+WHERE nome_peca = 'Cabo SATA III 6Gbps 50cm';
+
+UPDATE peca SET id_categoria = (SELECT id FROM categoria WHERE nome_categoria = 'baterias')
+WHERE nome_peca IN (
+	'Bateria Compatível iPhone 11 (3110mAh)',
+	'Bateria Compatível Samsung Galaxy A32',
+	'Bateria Compatível Moto G30');
+
+UPDATE peca SET id_categoria = (SELECT id FROM categoria WHERE nome_categoria = 'carcaças')
+WHERE nome_peca = 'Tampa Traseira de Vidro iPhone 12';
+
+UPDATE peca SET id_categoria = (SELECT id FROM categoria WHERE nome_categoria = 'componentes')
+WHERE nome_peca IN (
+	'Conector de Carga Type-C Universal (Unidade)',
+	'Conector de Carga Micro USB V8',
+	'Flex de Carga e Microfone Moto G9 Play',
+	'Câmera Traseira Principal Redmi Note 11',
+	'Alto-Falante Auricular Universal',
+	'Receptor Infravermelho para Controle Remoto TV',
+	'Fusível de Louça 5A 250V (Pacote c/ 10)',
+	'Capacitor Eletrolítico 1000uF x 25V');
+
+
+
+INSERT INTO entrada_peca (id_peca, preco_compra, preco_sugerido_venda, quantidade, id_funcionario, id_funcionario_cargo) VALUES
+(1,  18000, 26000, 20, 1, 1),  -- SSD NVMe
+(3,  11000, 17000, 15, 1, 1),  -- RAM DDR4
+(11, 22000, 35000, 10, 1, 1),  -- Display iPhone 11
+(14,  9000, 16000, 12, 1, 1),  -- Bateria iPhone 11
+(23, 14000, 23000,  8, 1, 1);  -- Barra LED TV Samsung
+
 
 CREATE TABLE saida_peca (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1671,11 +1772,17 @@ INSERT INTO entrada_peca (id_peca, preco_compra, quantidade, id_funcionario, id_
 ((SELECT id FROM peca WHERE nome_peca = 'Bateria Compatível iPhone 11 (3110mAh)'), 9000, 12, 1, 1),
 ((SELECT id FROM peca WHERE nome_peca = 'Barra de LED TV Samsung 50" (Kit com 3 barras)'), 14000, 8, 1, 1);
 
-INSERT INTO ordem (
-	descricao_defeito, defeito_constatado, valor_total, id_equipamento,
-	id_forma_pagamento, id_funcionario_abertura, id_funcionario_cargo,
-	id_situacao_atual, id_tecnico, id_tecnico_cargo, data_fechamento, data_abertura
-) VALUES
+INSERT INTO ordem (id_equipamento, defeito_relatado, defeito_constatado, data_abertura,
+	id_funcionario_abertura, id_funcionario_cargo_abertura, id_tecnico, id_tecnico_cargo) VALUES
+(1, 'Tela quebrada após queda.', 'Display frontal danificado, toque não responde.',
+	'2026-09-01 09:30:00', 2, 2, 5, 3),
+(3, 'Notebook muito lento para ligar.', 'Lentidão provocada por HD mecânico antigo.',
+	'2026-09-10 10:15:00', 3, 2, 6, 3),
+(4, 'TV com som, mas imagem não aparece.', 'Barra de LED queimada.',
+	'2026-09-15 11:00:00', 2, 2, 5, 3),
+(5, 'Desligando por aquecimento.', 'Acúmulo severo de poeira e necessidade de troca de pasta térmica.',
+	'2026-09-20 14:20:00', 4, 2, 6, 3);
+
 -- OS 1: troca de tela do iPhone 11 (Entregue)
 ('Tela quebrada após queda.',
  'Display frontal danificado, toque não responde.',
@@ -1709,22 +1816,19 @@ INSERT INTO ordem (
  (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'),
  5, 3, NULL, '2026-09-20 14:20:00');
 
-INSERT INTO ordem_situacao (id_ordem, id_nova_situacao, id_funcionario, data_situacao) VALUES
-(1, (SELECT id FROM situacao WHERE nome_situacao = 'Aberta'),              2, '2026-09-01 09:30:00'),
-(1, (SELECT id FROM situacao WHERE nome_situacao = 'Em análise'),          2, '2026-09-01 10:00:00'),
-(1, (SELECT id FROM situacao WHERE nome_situacao = 'Orçamento Aprovado'),  2, '2026-09-01 11:30:00'),
-(1, (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'),       4, '2026-09-01 14:00:00'),
-(1, (SELECT id FROM situacao WHERE nome_situacao = 'Concluída'),           4, '2026-09-02 15:30:00'),
-(1, (SELECT id FROM situacao WHERE nome_situacao = 'Entregue'),            2, '2026-09-02 16:00:00'),
-(2, (SELECT id FROM situacao WHERE nome_situacao = 'Aberta'),              3, '2026-09-10 10:15:00'),
-(2, (SELECT id FROM situacao WHERE nome_situacao = 'Orçamento Aprovado'),  3, '2026-09-10 10:45:00'),
-(2, (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'),       5, '2026-09-10 11:00:00'),
-(2, (SELECT id FROM situacao WHERE nome_situacao = 'Concluída'),           5, '2026-09-11 14:30:00'),
-(3, (SELECT id FROM situacao WHERE nome_situacao = 'Aberta'),              2, '2026-09-15 11:00:00'),
-(3, (SELECT id FROM situacao WHERE nome_situacao = 'Em análise'),          4, '2026-09-15 15:00:00'),
-(4, (SELECT id FROM situacao WHERE nome_situacao = 'Aberta'),              3, '2026-09-20 14:20:00'),
-(4, (SELECT id FROM situacao WHERE nome_situacao = 'Orçamento Aprovado'),  3, '2026-09-20 15:00:00'),
-(4, (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'),       5, '2026-09-20 16:00:00');
+INSERT INTO ordem_situacao (id_ordem, id_nova_situacao, id_tecnico, id_tecnico_cargo, data_situacao) VALUES
+(1, 1, 5, 3, '2026-09-01 09:30:00'),
+(1, 2, 5, 3, '2026-09-01 10:00:00'),
+(1, 3, 5, 3, '2026-09-01 11:30:00'),
+(1, 4, 5, 3, '2026-09-01 14:00:00'),
+(2, 1, 6, 3, '2026-09-10 10:15:00'),
+(2, 3, 6, 3, '2026-09-10 10:45:00'),
+(2, 4, 6, 3, '2026-09-10 11:00:00'),
+(3, 1, 5, 3, '2026-09-15 11:00:00'),
+(3, 2, 5, 3, '2026-09-15 15:00:00'),
+(4, 1, 6, 3, '2026-09-20 14:20:00'),
+(4, 3, 6, 3, '2026-09-20 15:00:00'),
+(4, 4, 6, 3, '2026-09-20 16:00:00');
 
 
 INSERT INTO ordem_peca (id_ordem, id_peca, quantidade, valor_unitario, id_tecnico, id_tecnico_cargo, data_situacao) VALUES
@@ -1732,20 +1836,31 @@ INSERT INTO ordem_peca (id_ordem, id_peca, quantidade, valor_unitario, id_tecnic
 (2, (SELECT id FROM peca WHERE nome_peca = 'SSD NVMe 512GB M.2'),                 1, 26000, 5, 3, '2026-09-10 11:30:00');
 
 
-INSERT INTO ordem_servico (id_ordem, id_servico, quantidade_servico, preco_praticado, data_execucao) VALUES
-(1, (SELECT id FROM servico WHERE nome_servico = 'Troca de Display/Frontal de Celular'), 1, 15000, '2026-09-01 15:00:00'),
-(2, (SELECT id FROM servico WHERE nome_servico = 'Formatação e Instalação de Sistema Operacional'), 1, 12000, '2026-09-10 13:00:00'),
-(3, (SELECT id FROM servico WHERE nome_servico = 'Troca de Barra de LED de Smart TV'), 1, 35000, '2026-09-15 16:00:00'),
-(4, (SELECT id FROM servico WHERE nome_servico = 'Higienização e Troca de Metal Líquido / Pasta Térmica (Console)'), 1, 22000, '2026-09-20 16:30:00');
+INSERT INTO ordem_servico (id_ordem, id_servico, preco_praticado, quantidade, data_execucao) VALUES
+(1, 6,  15000, 1, '2026-09-01 15:00:00'),  -- Troca de Display Frontal
+(2, 1,  12000, 1, '2026-09-10 13:00:00'),  -- Formatação e Instalação
+(3, 10, 35000, 1, '2026-09-15 16:00:00'),  -- Troca Barra de LED TV
+(4, 14, 22000, 1, '2026-09-20 16:30:00');  -- Higienização PS5
 
 
-INSERT INTO saida_peca (id_peca, preco_venda, quantidade, id_situacao, id_funcionario, id_funcionario_cargo) VALUES
+INSERT INTO saida_peca (id_peca, id_ordem, motivo, preco_venda, quantidade, id_tecnico, id_tecnico_cargo) VALUES
+(5, NULL, 'DESCARTE', 6000, 1, 5, 3);
+
 ((SELECT id FROM peca WHERE nome_peca = 'Display Frontal Completo iPhone 11'), 35000, 1,
  (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'), 1, 1),
 ((SELECT id FROM peca WHERE nome_peca = 'SSD NVMe 512GB M.2'), 26000, 1,
  (SELECT id FROM situacao WHERE nome_situacao = 'Em manutenção'), 1, 1),
 ((SELECT id FROM peca WHERE nome_peca = 'Pasta Térmica de Alta Performance (Bisnaga 4g)'), 6000, 1,
  (SELECT id FROM situacao WHERE nome_situacao = 'Descarte por Defeito/Avaria'), 1, 1);
+
+INSERT INTO ordem_situacao (id_ordem, id_nova_situacao, id_tecnico, id_tecnico_cargo, data_situacao) VALUES
+(2, 5, 6, 3, '2026-09-11 14:30:00'),
+(1, 5, 5, 3, '2026-09-02 15:30:00');
+
+UPDATE ordem SET id_forma_pagamento = 2 WHERE id = 1;  -- PIX
+
+INSERT INTO ordem_situacao (id_ordem, id_nova_situacao, id_tecnico, id_tecnico_cargo, data_situacao) VALUES
+(1, 6, 5, 3, '2026-09-02 16:00:00');
 
 CREATE VIEW vw_preco_sugerido_maior_100 AS
 SELECT id, nome_peca, preco_sugerido AS 'preço', estoque_real
