@@ -1669,8 +1669,6 @@ WHERE nome_peca IN (
 	'Fusível de Louça 5A 250V (Pacote c/ 10)',
 	'Capacitor Eletrolítico 1000uF x 25V');
 
-
-
 INSERT INTO entrada_peca (id_peca, preco_compra, preco_sugerido_venda, quantidade, id_funcionario, id_funcionario_cargo) VALUES
 (1,  18000, 26000, 20, 1, 1),  -- SSD NVMe
 (3,  11000, 17000, 15, 1, 1),  -- RAM DDR4
@@ -1678,19 +1676,6 @@ INSERT INTO entrada_peca (id_peca, preco_compra, preco_sugerido_venda, quantidad
 (14,  9000, 16000, 12, 1, 1),  -- Bateria iPhone 11
 (23, 14000, 23000,  8, 1, 1);  -- Barra LED TV Samsung
 
-
-CREATE TABLE saida_peca (
-	id INTEGER PRIMARY KEY AUTOINCREMENT,
-	id_peca INTEGER NOT NULL,
-	preco_venda INTEGER NOT NULL,
-	quantidade INTEGER NOT NULL,
-	id_situacao INTEGER NOT NULL,
-	id_funcionario INTEGER NOT NULL,
-	id_funcionario_cargo INTEGER NOT NULL CHECK (id_funcionario_cargo = 1),
-	data_cadastro TEXT NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	FOREIGN KEY (id_peca) REFERENCES peca(id),
-	FOREIGN KEY (id_situacao) REFERENCES situacao(id),
-	FOREIGN KEY (id_funcionario, id_funcionario_cargo) REFERENCES funcionario(id, id_cargo)
 
 INSERT INTO situacao (nome_situacao) VALUES
 ('Orçamento Aprovado'),
